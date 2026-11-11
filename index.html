@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>RL and Test-Time Scaling for LLM Reasoning – CSE 4813 Proposal</title>
+<style>
+:root{--bg:#fdfdfc;--tx:#1d2330;--mu:#5d6676;--ac:#1f4e8c;--ac2:#b4531e;--ln:#d9dde3;--soft:#f0f3f8}
+@media (prefers-color-scheme:dark){:root{--bg:#fdfdfc;--tx:#1d2330}}
+*{box-sizing:border-box}html,body{margin:0;height:100%;background:#e9ecf0;overflow:hidden;font-family:Georgia,'Times New Roman',serif;color:var(--tx)}
+#stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform-origin:center;background:var(--bg);box-shadow:0 4px 24px #0002}
+.s{position:absolute;inset:0;padding:48px 70px;opacity:0;visibility:hidden;transition:opacity .35s}
+.s.on{opacity:1;visibility:visible}
+h1{font-size:44px;margin:0 0 14px;line-height:1.15}h2{font-size:34px;margin:0 0 6px;color:var(--ac);font-weight:600;line-height:1.2}
+.sub{font-size:19px;color:var(--mu);margin:0 0 22px;font-style:italic}
+p,li,td,th{font-size:21px;line-height:1.4}li{margin:5px 0}ul{margin:6px 0;padding-left:26px}
+.sans,.cap,.tag,table,.nav{font-family:system-ui,-apple-system,'Segoe UI',Arial,sans-serif}
+.cap{font-size:15px;color:var(--mu);margin-top:8px}.cite{font-size:13px;color:var(--mu);font-family:system-ui,sans-serif}
+.row{display:flex;gap:22px;align-items:stretch}.col{flex:1}
+.box{border:1.5px solid var(--ln);border-radius:8px;padding:12px 16px;background:var(--soft)}
+.box.a{border-color:var(--ac)}.box.b{border-color:var(--ac2)}
+.flow{display:flex;align-items:center;gap:10px;margin:14px 0}
+.node{flex:1;text-align:center;border:1.5px solid var(--ac);border-radius:8px;padding:12px 8px;font:600 17px system-ui,sans-serif;background:#fff}
+.node small{display:block;font-weight:400;color:var(--mu);font-size:13px;margin-top:3px}
+.node.o{border-color:var(--ac2)}.arr{color:var(--mu);font-size:26px}
+.eq{font:italic 26px 'Cambria Math',Georgia,serif;text-align:center;background:var(--soft);border-radius:8px;padding:10px;margin:10px 0}
+table{border-collapse:collapse;width:100%}th,td{border:1px solid var(--ln);padding:8px 12px;text-align:left;font-size:17px;vertical-align:top}th{background:var(--soft);color:var(--ac)}
+.tag{display:inline-block;font-size:13px;padding:2px 8px;border-radius:10px;color:#fff;background:var(--ac);margin-right:4px}.tag.x{background:var(--ac2)}
+.f{opacity:0;transition:opacity .4s}.f.v{opacity:1}
+.ph{border-bottom:1px dashed var(--mu);padding:0 6px}
+.nav{position:fixed;bottom:10px;left:50%;transform:translateX(-50%);display:flex;gap:10px;align-items:center;font-size:14px;color:var(--mu);z-index:9}
+.nav button{border:1px solid var(--ln);background:#fff;border-radius:6px;padding:5px 14px;cursor:pointer;font-size:14px;color:var(--tx)}
+.bar{position:absolute;left:0;bottom:0;height:4px;background:var(--ac);transition:width .3s}
+.ttl{text-align:center;padding-top:110px}.ttl h1{font-size:40px}
+</style></head><body>
+<div id="stage">
+
+<section class="s ttl"><p class="sans" style="color:var(--ac2);letter-spacing:2px;font-size:16px">RESEARCH PROPOSAL</p>
+<h1>Reinforcement Learning and Test-Time Scaling for Improving Reasoning Capabilities in Large Language Models</h1>
+<p class="sub">A Deep Learning Perspective (2024–2026)</p>
+<p style="margin-top:34px"><b>CSE 4813 – Deep Learning</b> · United International University</p>
+<p class="sans" style="font-size:17px;color:var(--mu)" contenteditable><span class="ph">[Student Name]</span> · <span class="ph">[Student ID]</span> · Instructor: <span class="ph">[Instructor Name]</span> · <span class="ph">[Semester]</span></p></section>
+
+<section class="s"><h2>Background: From Neural Networks to Reasoning LLMs</h2><p class="sub">Fluent text is not the same as correct reasoning</p>
+<div class="flow"><div class="node">Neural networks<small>learn features from data</small></div><span class="arr">→</span><div class="node">Transformers<small>self-attention (2017)</small></div><span class="arr">→</span><div class="node">LLMs<small>text, code, maths</small></div><span class="arr">→</span><div class="node o">Reasoning-focused LLMs<small>RL + extra inference compute</small></div></div>
+<ul><li class="f">Transformers use attention to model long-range context; scaled up, they became LLMs.</li><li class="f">LLMs can generate text, write code and attempt maths problems.</li><li class="f">But producing a <i>plausible</i> answer does not guarantee a <i>correct</i> one.</li></ul>
+<p class="cap">Figure: simplified evolution of the model family studied in this proposal.</p></section>
+
+<section class="s"><h2>Research Problem: Can LLMs Actually Reason?</h2><p class="sub">Many LLMs are strong, yet standard single-pass answers can still fail on multi-step problems</p>
+<div class="row"><div class="col"><ul><li>Arithmetic or algebra slips in long chains</li><li>Logical inconsistencies between steps</li><li>Hallucinated or unreliable answers</li><li>Weak performance on complex multi-step problems</li></ul></div>
+<div class="col box f"><b>Illustrative example</b><p style="margin:6px 0">“A shop sells pens at 12 for 90 tk. What do 18 pens cost?”</p><p style="margin:6px 0">Flawed: 90 ÷ 12 = 7 → 7 × 18 = 126 ✗<br>Correct: 90 ÷ 12 = 7.5 → 7.5 × 18 = <b>135</b> ✓</p><p class="cap">One wrong intermediate step ruins the answer. (Constructed example, not a measured result.)</p></div></div></section>
+
+<section class="s"><h2>Research Motivation</h2><p class="sub">Why does better reasoning matter?</p>
+<div class="row"><div class="col"><ul><li><b>Mathematics:</b> multi-step problem solving</li><li><b>Programming:</b> correct code generation</li><li><b>Science:</b> structured, checkable analysis</li><li><b>Reliability:</b> trustworthy AI applications</li></ul></div>
+<div class="col box a f"><b>Central research question</b><p style="margin-top:8px">How can we improve the reasoning capabilities of Large Language Models through <span style="color:var(--ac)">Reinforcement Learning</span> and <span style="color:var(--ac2)">Test-Time Scaling</span>?</p></div></div></section>
+
+<section class="s"><h2>Approach 1: Reinforcement Learning (RL)</h2><p class="sub">Learn from feedback during training</p>
+<div class="row"><div class="col"><ul style="font-size:19px"><li><b>Agent:</b> the LLM · <b>Environment:</b> the task</li><li><b>Action:</b> generating a response (tokens)</li><li><b>Reward:</b> a score, e.g. 1 if the final answer is correct</li><li><b>Policy π<sub>θ</sub>:</b> the model’s distribution over outputs</li></ul>
+<div class="box f"><b>Analogy:</b> a student practises maths problems, checks answers, and adjusts study habits.</div></div>
+<div class="col"><div class="eq">J(θ) = E<sub>y∼π<sub>θ</sub>(·|x)</sub>[ R(x, y) ]</div><p class="cap" style="margin-top:0">Illustrative objective. θ: model parameters; x: question; y: response; R: reward. Training raises the expected reward.</p>
+<p class="f" style="font-size:18px"><b>PPO</b> and <b>GRPO</b> are <i>algorithms</i> for this update. GRPO scores a group of sampled answers per question relative to each other, and features in recent reasoning-LLM work (e.g. DeepSeek-R1). RL is broader than RLHF: rewards can be rule-based (answer checkers) or learned.</p></div></div>
+<div class="flow"><div class="node">Question</div><span class="arr">→</span><div class="node">LLM response</div><span class="arr">→</span><div class="node o">Reward evaluation</div><span class="arr">→</span><div class="node o">Policy update</div><span class="arr">→</span><div class="node">Improved model</div></div></section>
+
+<section class="s"><h2>Approach 2: Test-Time Scaling (TTS)</h2><p class="sub">“Allocating additional computational resources during inference so that an LLM can spend more effort solving a problem.”</p>
+<div class="flow"><div class="node">Question</div><span class="arr">→</span><div class="node">N candidate solutions<small>longer reasoning / sampling</small></div><span class="arr">→</span><div class="node o">Verifier / vote<small>best-of-N, search</small></div><span class="arr">→</span><div class="node">Final answer</div></div>
+<div class="row"><div class="col"><ul style="font-size:19px"><li>More reasoning tokens, multiple attempts, best-of-N</li><li>Search and verification over solution paths</li><li class="f">Cost: more tokens, more latency</li><li class="f"><b>Parameters are not necessarily updated.</b></li><li class="f">More compute ≠ guaranteed correctness</li></ul></div>
+<div class="col"><div class="eq" style="font-size:22px">C<sub>total</sub> = C<sub>model</sub> + C<sub>reasoning</sub> + C<sub>search/verify</sub></div><p class="cap" style="margin-top:0">Conceptual, not universal. C<sub>model</sub>: base forward cost; C<sub>reasoning</sub>: extra generated tokens; C<sub>search/verify</sub>: sampling and checking overhead.</p>
+<div class="box f" style="font-size:17px">Example: sample 5 solutions to the pen problem → 135, 135, 126, 135, 140. A vote or checker picks 135. Reasoning traces are not proof of the model’s internal reasoning.</div></div></div></section>
+
+<section class="s"><h2>Reinforcement Learning vs. Test-Time Scaling</h2>
+<table><tr><th></th><th style="color:var(--ac)">Reinforcement Learning</th><th style="color:var(--ac2)">Test-Time Scaling</th></tr>
+<tr><td>Main objective</td><td>Learn better reasoning behaviour</td><td>Spend more effort per problem</td></tr>
+<tr><td>When</td><td>Training phase</td><td>Inference phase</td></tr>
+<tr><td>Parameters change?</td><td>Yes</td><td>Not necessarily</td></tr>
+<tr><td>Compute</td><td>Heavy upfront training cost</td><td>Extra cost on every query</td></tr>
+<tr><td>How it may help</td><td>Rewards reinforce correct reasoning patterns</td><td>Exploring and checking more candidates</td></tr>
+<tr><td>Limitations</td><td>Reward design, reward hacking</td><td>Latency, cost, unreliable self-verification</td></tr></table>
+<div class="row" style="margin-top:14px"><div class="box a col f" style="font-size:17px"><b>RL</b> = learning and practising before an examination.</div><div class="box b col f" style="font-size:17px"><b>TTS</b> = spending more time and effort on a question during the examination.</div></div></section>
+
+<section class="s"><h2>How Can Both Approaches Work Together?</h2><p class="sub">A conceptual research framework, not a claim that every existing model follows this pipeline</p>
+<div class="flow"><div class="node">1. Pre-trained LLM</div><span class="arr">→</span><div class="node o">2. RL training</div><span class="arr">→</span><div class="node">3. Improved reasoning behaviour</div></div>
+<div class="flow"><div class="node o">4. Extra inference compute</div><span class="arr">→</span><div class="node o">5. Candidates + verification</div><span class="arr">→</span><div class="node">6. Final response</div></div>
+<ul><li class="f">RL shapes <i>what the model is able to do</i>; TTS decides <i>how much effort is spent per query</i>.</li><li class="f">Open question: are the gains complementary, or do they overlap? (RQ4)</li></ul></section>
+
+<section class="s"><h2>Existing Research and Key Developments</h2><p class="sub">Selected works; DeepSeek-R1 is one case study, not the whole topic</p>
+<table style="font-size:15px"><tr><th>Work</th><th>Year</th><th>Contribution (own summary)</th><th>Why it matters</th></tr>
+<tr><td>DeepSeek-R1 (DeepSeek-AI) <span class="tag x">preprint</span><br><span class="cite">arXiv:2501.12948</span></td><td>2025</td><td>Reasoning model trained with large-scale RL (GRPO)</td><td>RL case study</td></tr>
+<tr><td>Scaling LLM Test-Time Compute Optimally can be More Effective than Scaling Model Parameters (Snell et al.) <span class="tag">ICLR 2025</span><br><span class="cite">arXiv:2408.03314</span></td><td>2025</td><td>Studies compute-optimal use of inference compute vs. model size</td><td>TTS evidence and trade-offs</td></tr>
+<tr><td>Towards Large Reasoning Models: A Survey of Reinforced Reasoning with LLMs (Xu et al.) <span class="tag x">preprint</span><br><span class="cite">arXiv:2501.09686</span></td><td>2025</td><td>Surveys reinforced reasoning and test-time compute</td><td>Literature map</td></tr>
+<tr><td>A Survey of Slow Thinking-based Reasoning LLMs using Reinforced Learning and Inference-time Scaling Law (Pan et al.) <span class="tag x">preprint</span><br><span class="cite">arXiv:2505.02665</span></td><td>2025</td><td>Organises work into test-time scaling, RL and slow-thinking frameworks</td><td>Links both approaches</td></tr></table>
+<p class="cap">Note: arXiv lists the 2025 survey as submitted May 2025; confirm exact titles and any later venue before submission.</p></section>
+
+<section class="s"><h2>Research Gap and Open Challenges</h2><p class="sub">Potential gaps requiring further investigation, not claims of “unexplored” territory</p>
+<div class="row"><div class="col"><ul><li>High computational cost of test-time reasoning</li><li>Reward design and reward hacking in RL</li><li>Reliability of self-verification</li></ul></div><div class="col"><ul><li>Accuracy vs. inference-cost trade-offs</li><li>Are RL and TTS gains complementary?</li><li>Fair evaluation across models and benchmarks</li></ul></div></div>
+<div class="box f" style="margin-top:14px">Surveys (e.g. Pan et al.) already discuss several of these; this proposal focuses on a <b>structured, cost-aware comparison</b> at undergraduate scale.</div></section>
+
+<section class="s"><h2>Research Objectives and Questions</h2>
+<table><tr><th>Objective</th><th>Research question</th></tr>
+<tr><td>1. Investigate how RL improves LLM reasoning</td><td>RQ1: How does RL influence reasoning performance?</td></tr>
+<tr><td>2. Examine how TTS affects accuracy and efficiency</td><td>RQ2: How does extra inference compute affect accuracy?</td></tr>
+<tr><td>3. Compare benefits and limitations of both</td><td>RQ3: What trade-offs exist among accuracy, cost and response time?</td></tr>
+<tr><td>4. Investigate combining them</td><td>RQ4: How can RL and TTS complement each other?</td></tr></table></section>
+
+<section class="s"><h2>Proposed Research Methodology</h2><p class="sub">Feasible for undergraduates: no training of large reasoning models from scratch</p>
+<div class="flow" style="margin-top:6px"><div class="node">1 Literature review<small>2024–2026 papers</small></div><span class="arr">→</span><div class="node">2 Framework<small>models, benchmarks</small></div><span class="arr">→</span><div class="node o">3 Comparative evaluation</div><span class="arr">→</span><div class="node">4 Analysis</div><span class="arr">→</span><div class="node">5 Reporting</div></div>
+<div class="row"><div class="col box a" style="font-size:16px"><b>Literature-based comparison</b><br>Compare results <i>reported</i> in public papers and model reports for RL-trained and TTS methods.</div>
+<div class="col box b f" style="font-size:16px"><b>Proposed small experiment (if feasible)</b><br>Run small open-weight models (e.g. ≈1–7B, quantised, free Colab/Kaggle GPU) on a GSM8K/MATH subset: greedy vs. majority vote / best-of-N vs. an open distilled reasoning model.</div></div>
+<p class="cap">No experiments have been conducted yet. Model choices are proposals pending compute availability and licensing checks.</p></section>
+
+<section class="s"><h2>Evaluation Metrics and Benchmarks</h2>
+<div class="row"><div class="col"><table><tr><th>Metric</th><th>Meaning</th></tr><tr><td>Accuracy / exact match</td><td>Fraction of correct final answers</td></tr><tr><td>Generated tokens</td><td>Proxy for inference cost</td></tr><tr><td>Latency</td><td>Seconds per answer</td></tr><tr><td>Accuracy vs. compute</td><td>Trade-off curve</td></tr><tr><td>Pass@1 (if coding)</td><td>First sample passes tests</td></tr></table></div>
+<div class="col"><table><tr><th>Benchmark</th><th>Measures</th></tr><tr><td>GSM8K</td><td>Grade-school word problems</td></tr><tr><td>MATH</td><td>Competition mathematics</td></tr><tr><td>AIME (optional)</td><td>Hard olympiad-style maths</td></tr><tr><td>HumanEval (optional)</td><td>Python code generation</td></tr></table></div></div>
+<p class="cap">Focus on mathematical reasoning. Watch for benchmark contamination.</p></section>
+
+<section class="s"><h2>Expected Contributions, Limitations, Timeline</h2>
+<div class="row"><div class="col"><b>Contributions</b><ul style="font-size:18px"><li>Structured RL vs. TTS comparison</li><li>Accuracy–computation trade-off analysis</li><li>Discussion of combined approaches</li></ul><b>Limitations</b><ul style="font-size:18px"><li>Limited compute</li><li>Differing architectures and training data</li><li>Fairness across papers; contamination</li></ul></div>
+<div class="col"><b>Timeline (editable)</b><table contenteditable style="margin-top:6px"><tr><td>Weeks 1–3</td><td>Literature review</td></tr><tr><td>Weeks 4–5</td><td>Framework and setup</td></tr><tr><td>Weeks 6–8</td><td>Comparative evaluation</td></tr><tr><td>Weeks 9–10</td><td>Analysis</td></tr><tr><td>Weeks 11–12</td><td>Report and presentation</td></tr></table></div></div></section>
+
+<section class="s"><h2>Why Is This Research Relevant to CSE 4813 – Deep Learning?</h2>
+<table style="font-size:15px"><tr><th>Course content</th><th>Link to this research</th><th>Status</th><th>CO</th></tr>
+<tr><td>Wk 3, 5 – Learning paradigms, training, generalisation, evaluation</td><td>RL changes model behaviour via feedback; evaluation of reasoning accuracy</td><td><span class="tag">Core</span></td><td>CO1, CO2</td></tr>
+<tr><td>Wk 9 – Transformers and LLMs</td><td>Reasoning in Transformer-based LMs; limitations</td><td><span class="tag">Core</span></td><td>CO1, CO3</td></tr>
+<tr><td>Wk 11 – Deep Reinforcement Learning</td><td>Agent, reward, policy applied to LLM post-training</td><td><span class="tag">Core</span></td><td>CO3</td></tr>
+<tr><td>Wk 12 – Presentation, reproducibility, limitations</td><td>Literature review and possible reproducible comparison</td><td><span class="tag">Core</span></td><td>CO4, CO5</td></tr>
+<tr><td>GRPO, PPO for LLMs; Test-Time Scaling</td><td>Advanced research topics building on the above</td><td><span class="tag x">Extension</span></td><td>CO3, CO4</td></tr></table>
+<p class="cap">CO1 fundamentals · CO2 apply/implement · CO3 analyse/compare architectures · CO4 evaluate with metrics and baselines · CO5 reproducible presentation. GRPO and TTS are not named lecture topics in the outline.</p></section>
+
+<section class="s"><h2>Conclusion</h2>
+<div class="box a" style="margin:16px 0;font-size:23px">Reinforcement Learning helps LLMs learn better reasoning behaviours, while Test-Time Scaling gives them additional computational effort to solve difficult problems. Studying both approaches provides an important direction for improving reasoning in modern deep learning systems.</div>
+<p style="font-size:15px;line-height:1.35" class="sans"><b>References</b> (arXiv preprints unless noted)<br>
+[1] DeepSeek-AI (2025). DeepSeek-R1. arXiv:2501.12948 · doi.org/10.48550/arXiv.2501.12948<br>
+[2] Snell, C. et al. (2025). Scaling LLM Test-Time Compute Optimally… ICLR 2025. arXiv:2408.03314<br>
+[3] Xu, F. et al. (2025). Towards Large Reasoning Models… arXiv:2501.09686<br>
+[4] Pan, Q. et al. (2025). A Survey of Slow Thinking-based Reasoning LLMs… arXiv:2505.02665 · doi.org/10.48550/arXiv.2505.02665<br>
+[5] Shao, Z. et al. (2024). DeepSeekMath (introduces GRPO). arXiv:2402.03300 · [6] Schulman, J. et al. (2017). PPO. arXiv:1707.06347<br>
+[7] Cobbe, K. et al. (2021). GSM8K. arXiv:2110.14168 · [8] Hendrycks, D. et al. (2021). MATH. arXiv:2103.03874 · [9] Chen, M. et al. (2021). HumanEval. arXiv:2107.03374</p></section>
+
+<section class="s ttl"><h1>Questions?</h1><p class="sub">Thank you</p></section>
+</div>
+<div class="bar" id="bar"></div>
+<div class="nav"><button id="pv">◀ Prev</button><span id="no"></span><button id="nx">Next ▶</button></div>
+<script>
+(function(){
+var S=[].slice.call(document.querySelectorAll('.s')),i=0,st=document.getElementById('stage');
+function fit(){var k=Math.min(innerWidth/1280,(innerHeight-44)/720);st.style.transform='translate(-50%,-50%) scale('+k+')'}
+function fr(){return [].slice.call(S[i].querySelectorAll('.f:not(.v)'))}
+function show(n,all){i=Math.max(0,Math.min(S.length-1,n));S.forEach(function(s,j){s.classList.toggle('on',j===i)});
+ [].forEach.call(S[i].querySelectorAll('.f'),function(e){e.classList.toggle('v',!!all)});
+ document.getElementById('no').textContent=(i+1)+' / '+S.length;document.getElementById('bar').style.width=((i+1)/S.length*100)+'%';
+ try{location.hash='s'+(i+1)}catch(e){}}
+function nx(){var f=fr();if(f.length)f[0].classList.add('v');else show(i+1)}
+function pv(){var v=S[i].querySelectorAll('.f.v');if(v.length)v[v.length-1].classList.remove('v');else show(i-1,true)}
+document.getElementById('nx').onclick=nx;document.getElementById('pv').onclick=pv;
+addEventListener('keydown',function(e){if(e.target.isContentEditable)return;
+ if(['ArrowRight','ArrowDown','PageDown',' '].indexOf(e.key)>-1){e.preventDefault();nx()}
+ else if(['ArrowLeft','ArrowUp','PageUp'].indexOf(e.key)>-1){e.preventDefault();pv()}
+ else if(e.key==='Home')show(0);else if(e.key==='End')show(S.length-1,true)});
+addEventListener('resize',fit);fit();
+var h=parseInt((location.hash||'').slice(2),10);show(h>0?h-1:0,h>0);
+})();
+</script></body></html>
